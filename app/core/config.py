@@ -1,5 +1,6 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,19 @@ class Settings(BaseSettings):
 
     # CORS
     allowed_origins: List[str] = ["*"]
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v):
+        """Accept both plain string and JSON array formats."""
+        if isinstance(v, str):
+            # If it's a JSON array string, parse it
+            if v.startswith("["):
+                import json
+                return json.loads(v)
+            # Otherwise treat as comma-separated or single value
+            return [origin.strip() for origin in v.split(",")]
+        return v
 
     # Optional explicit creds (prefer default AWS resolution if unset)
     aws_access_key_id: Optional[str] = None
