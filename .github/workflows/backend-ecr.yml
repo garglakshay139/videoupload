@@ -4,7 +4,9 @@ on:
   push:
     branches: [ main, master ]
     paths:
-      - 'backend/**'
+      - 'app/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
       - '.github/workflows/backend-ecr.yml'
   workflow_dispatch:
 
@@ -45,7 +47,7 @@ jobs:
 
       - name: Build image
         run: |
-          docker build -t ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }} -f backend/Dockerfile .
+          docker build -t ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }} .
 
       - name: Push image (commit SHA)
         run: |
