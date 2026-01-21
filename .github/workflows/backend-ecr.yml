@@ -1,0 +1,62 @@
+name: Build and Push Backend to ECR
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ecr.yml'
+  workflow_dispatch:
+
+env:
+  ECR_REPOSITORY: youtube-backend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Get AWS account ID
+        id: acct
+        run: |
+          echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tags
+        id: meta
+        run: |
+          echo "registry=${{ steps.acct.outputs.account_id }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
+          echo "image=${{ steps.acct.outputs.account_id }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build image
+        run: |
+          docker build -t ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }} -f backend/Dockerfile .
+
+      - name: Push image (commit SHA)
+        run: |
+          docker push ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+
+      - name: Tag and push latest
+        run: |
+          docker tag ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }} ${{ steps.meta.outputs.image }}:latest
+          docker push ${{ steps.meta.outputs.image }}:latest
+
+      - name: Echo image URI
+        run: |
+          echo "Pushed: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
+          echo "Latest:  ${{ steps.meta.outputs.image }}:latest"

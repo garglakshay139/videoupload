@@ -1,0 +1,18 @@
+# Docker ignore for backend
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.build/
+.dist/
+.venv/
+.env
+.git/
+.gitignore
+node_modules/
+UI/
+scripts/
+tests/
+README.md
