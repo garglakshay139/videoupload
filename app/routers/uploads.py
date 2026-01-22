@@ -154,3 +154,65 @@ def abort_upload(payload: AbortUploadRequest):
         return {"aborted": True}
     except (ClientError, BotoCoreError) as e:
         raise HTTPException(status_code=500, detail=f"Failed to abort upload: {e}")
+
+
+@router.get("/list")
+def list_videos(
+    prefix: str = Query(default="uploads/", description="S3 prefix to list"),
+    max_keys: int = Query(default=100, ge=1, le=1000, description="Max videos to return"),
+):
+    """List uploaded videos from S3 bucket."""
+    s3 = get_s3_client()
+    try:
+        response = s3.list_objects_v2(
+            Bucket=settings.s3_bucket_name,
+            Prefix=prefix,
+            MaxKeys=max_keys,
+        )
+        
+        videos = []
+        for obj in response.get("Contents", []):
+            key = obj["Key"]
+            # Skip non-video files and directories
+            if not key.lower().endswith(('.mp4', '.webm', '.mov', '.avi', '.mkv')):
+                continue
+            
+            # Extract filename from key
+            filename = key.split("/")[-1]
+            # Remove UUID prefix if present (format: uuid-filename.ext)
+            if len(filename) > 37 and filename[36] == '-':
+                title = filename[37:]
+            else:
+                title = filename
+            
+            # Generate presigned URL for viewing
+            view_url = s3.generate_presigned_url(
+                ClientMethod="get_object",
+                Params={
+                    "Bucket": settings.s3_bucket_name,
+                    "Key": key,
+                },
+                ExpiresIn=3600,  # 1 hour
+            )
+            
+            videos.append({
+                "id": key,
+                "key": key,
+                "title": title.replace("-", " ").replace("_", " ").rsplit(".", 1)[0],
+                "url": view_url,
+                "size": obj["Size"],
+                "uploaded": obj["LastModified"].isoformat(),
+                "lastModified": obj["LastModified"].isoformat(),
+            })
+        
+        # Sort by upload date, newest first
+        videos.sort(key=lambda x: x["lastModified"], reverse=True)
+        
+        return {
+            "videos": videos,
+            "count": len(videos),
+            "bucket": settings.s3_bucket_name,
+            "region": settings.aws_region,
+        }
+    except (ClientError, BotoCoreError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list videos: {e}")
